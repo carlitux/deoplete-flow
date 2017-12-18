@@ -32,6 +32,17 @@ or using [Plug](https://github.com/junegunn/vim-plug)
 Plug 'carlitux/deoplete-flow'
 ```
 
+## Vim Configuration example
+```vim
+"Add extra filetypes
+let g:deoplete#sources#flow#filetypes = [
+                \ 'jsx',
+                \ 'javascript.jsx',
+                \ 'vue',
+                \ '...'
+                \ ]
+```
+
 ## Credits
 
 The initial version is based on [autocomplete-flow](https://github.com/wokalski/autocomplete-flow).

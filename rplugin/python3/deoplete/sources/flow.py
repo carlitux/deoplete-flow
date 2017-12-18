@@ -29,23 +29,23 @@ class Source(Base):
 
     def gather_candidates(self, context):
         if self._stop_working:
-            return None
-
+            return []
+        self.debug(context['input'])
         if context['is_async']:
-            if self.candidates:
+            if self.candidates is not None:
                 context['is_async'] = False
                 return self.candidates
         else:
             self.candidates = None
             context['is_async'] = True
-            line = context['position'][1] - 1
-            col = context['complete_position']
+            line = context['position'][1]
+            col = context['complete_position'] + 1
 
             # Cache variables of neovim
             self._current_buffer = self.vim.current.buffer[:]
-
+            args = (line, col,)
             startThread = threading.Thread(
-                target=self.completation, name='Request Completion', args=(line, col,))
+                target=self.completation, name='Request Completion', args=args)
             startThread.start()
             startThread.join()
 
@@ -53,7 +53,8 @@ class Source(Base):
         return []
 
     def completation(self, line, column):
-        command = [self._flow_command, 'autocomplete', '--json', line, column]
+        command = [self._flow_command, 'autocomplete', '--no-auto-start',
+                   '--json', str(line), str(column)]
 
         buf = '\n'.join(self._current_buffer)
 
@@ -63,16 +64,17 @@ class Source(Base):
             command_results = process.communicate(input=str.encode(buf))[0]
 
             if process.returncode != 0:
-                return []
+                self.candidates = []
+            else:
+                results = json.loads(command_results.decode('utf-8'))
+                # self.debug(results)
 
-            results = json.loads(command_results.decode('utf-8'))
-            self.debug(result)
-
-            self.candidates = [{
-                'dup': 0,
-                'word': x['name'],
-                'abbr': x['name'],
-                'info': x['type'],
-                'kind': x['type']} for x in results['result']]
+                self.candidates = [{
+                    'dup': 0,
+                    'word': x['name'],
+                    'abbr': x['name'],
+                    'info': x['type'],
+                    'kind': x['type']} for x in results['result']]
         except FileNotFoundError:
+            self.candidates = []
             self._stop_working = True
