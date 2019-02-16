@@ -3,10 +3,14 @@
 
 import re
 import json
+import platform
 import threading
 import subprocess
 
 from .base import Base
+
+is_window = platform.system() == "Windows"
+flow_token = 'AUTO332'
 
 
 class Source(Base):
@@ -17,11 +21,12 @@ class Source(Base):
         self.filetypes = ['javascript']
         self.min_pattern_length = 2
         self.rank = 800
-        self.input_pattern = '((?:\.|(?:,|:|->)\s+)\w*|\()'
+        self.input_pattern = r'\.\w*$|^\s*@\w*$'
 
     def on_init(self, context):
         self._stop_working = False
         self._flow_command = context['vars']['deoplete#sources#flow#flowbin']
+        self._vim_current_cwd = self.vim.eval('getcwd()')
 
     def get_complete_position(self, context):
         m = re.search(r'\w*$', context['input'])
@@ -38,12 +43,13 @@ class Source(Base):
         else:
             self.candidates = None
             context['is_async'] = True
-            line = context['position'][1]
-            col = context['complete_position'] + 1
+            line = context['position'][1] - 1
+            col = context['position'][2] - 1
+            current_file = context['bufname']
 
             # Cache variables of neovim
             self._current_buffer = self.vim.current.buffer[:]
-            args = (line, col,)
+            args = (line, col, current_file)
             startThread = threading.Thread(
                 target=self.completation, name='Request Completion', args=args)
             startThread.start()
@@ -52,22 +58,30 @@ class Source(Base):
         # This ensure that async request will work
         return []
 
-    def completation(self, line, column):
-        command = [self._flow_command, 'autocomplete', '--no-auto-start',
-                   '--json', str(line), str(column)]
+    def completation(self, line, column, current_file):
+        command = [self._flow_command, 'autocomplete',
+                   '--no-auto-start', '--json', current_file]
 
+        current_line = self._current_buffer[line]
+        self._current_buffer[line] = current_line[:column] + \
+            flow_token + current_line[column:]
         buf = '\n'.join(self._current_buffer)
 
         try:
             process = subprocess.Popen(
-                command, stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+                command,
+                cwd=self._vim_current_cwd,
+                shell=is_window,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
             command_results = process.communicate(input=str.encode(buf))[0]
 
             if process.returncode != 0:
                 self.candidates = []
             else:
                 results = json.loads(command_results.decode('utf-8'))
-                # self.debug(results)
 
                 self.candidates = [{
                     'dup': 0,
