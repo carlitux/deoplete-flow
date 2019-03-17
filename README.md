@@ -15,8 +15,8 @@ Flow autocompletion for [deoplete](https://github.com/Shougo/deoplete.nvim)
 - deoplete.nvim
   - https://github.com/Shougo/deoplete.nvim
 
-- ternjs
-  - http://ternjs.net/  - This needs to be installed globally
+- flowtype
+  - https://www.npmjs.com/package/flow-bin - This needs to be installed globally
 
 ## Install
 
