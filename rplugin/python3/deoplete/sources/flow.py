@@ -82,13 +82,34 @@ class Source(Base):
                 self.candidates = []
             else:
                 results = json.loads(command_results.decode('utf-8'))
+                self.candidates = []
 
-                self.candidates = [{
-                    'dup': 0,
-                    'word': x['name'],
-                    'abbr': x['name'],
-                    'info': x['type'],
-                    'kind': x['type']} for x in results['result']]
+                for t in results['result']:
+                    self.candidates.append({
+                        'dup': 0,
+                        'kind': self.get_kind(t),
+                        'word': t['name'],
+                        'info': t['type'],
+                        'abbr': '{}{}'.format(t['name'], self.get_signature(t)) 
+                        })
+
         except FileNotFoundError:
             self.candidates = []
             self._stop_working = True
+
+    def get_kind(self, rec):
+        kind = rec.get('type')
+
+        if kind.startswith('class'):
+            return 'class'
+        elif rec.get('func_details'):
+            return 'function'
+
+        return kind
+
+    def get_signature(self, rec):
+        if rec.get('func_details'):
+            return rec.get('type')
+
+        return ''
+
