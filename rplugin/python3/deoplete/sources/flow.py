@@ -21,28 +21,28 @@ class Source(Base):
         self.filetypes = ['javascript']
         self.min_pattern_length = 2
         self.rank = 800
+        self.is_volatile = True
         self.input_pattern = r'\.\w*$|^\s*@\w*$'
 
     def on_init(self, context):
         self._stop_working = False
         self._flow_command = context['vars']['deoplete#sources#flow#flowbin']
         self._vim_current_cwd = self.vim.eval('getcwd()')
+        self.candidates = None
 
     def get_complete_position(self, context):
         m = re.search(r'\w*$', context['input'])
         return m.start() if m else -1
 
     def gather_candidates(self, context):
-        if self._stop_working:
+        if self._stop_working or not context['is_refresh']:
             return []
-        self.debug(context['input'])
-        if context['is_async']:
-            if self.candidates is not None:
-                context['is_async'] = False
-                return self.candidates
-        else:
+
+        if self.candidates is not None:
+            candidates = self.candidates
             self.candidates = None
-            context['is_async'] = True
+            return candidates
+        else:
             line = context['position'][1] - 1
             col = context['position'][2] - 1
             current_file = context['bufname']
@@ -54,9 +54,6 @@ class Source(Base):
                 target=self.completation, name='Request Completion', args=args)
             startThread.start()
             startThread.join()
-
-        # This ensure that async request will work
-        return []
 
     def completation(self, line, column, current_file):
         command = [self._flow_command, 'autocomplete',
@@ -78,9 +75,7 @@ class Source(Base):
             )
             command_results = process.communicate(input=str.encode(buf))[0]
 
-            if process.returncode != 0:
-                self.candidates = []
-            else:
+            if process.returncode == 0:
                 results = json.loads(command_results.decode('utf-8'))
                 self.candidates = []
 
@@ -92,9 +87,10 @@ class Source(Base):
                         'info': t['type'],
                         'abbr': '{}{}'.format(t['name'], self.get_signature(t)) 
                         })
+                
+                self.vim.command('call deoplete#auto_complete()')
 
         except FileNotFoundError:
-            self.candidates = []
             self._stop_working = True
 
     def get_kind(self, rec):
